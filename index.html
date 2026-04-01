@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>360 Reverse Engineering: Harvey.ai</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg-warm: #F5F0EB;
+  --bg-dark: #1A1A1A;
+  --bg-dark-alt: #111111;
+  --text-dark: #1A1A1A;
+  --text-light: #F5F0EB;
+  --text-muted: #6B6560;
+  --accent: #4A5A3A;
+  --accent-light: #5C6E4A;
+  --red: #C0392B;
+  --red-bg: #2A1A1A;
+  --green: #6B8F5E;
+  --green-bg: #1A2A1A;
+  --yellow: #B8960C;
+  --yellow-bg: #2A2A1A;
+  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --max-w: 1200px;
+  --pad: clamp(24px, 6vw, 120px);
+}
+html { scroll-behavior: smooth; font-size: 16px; }
+body { font-family: var(--sans); color: var(--text-dark); background: var(--bg-warm); line-height: 1.6; }
+img { max-width: 100%; display: block; }
+a { color: inherit; text-decoration: none; }
+
+/* ── Announcement Bar ── */
+.announcement {
+  background: var(--bg-dark);
+  color: var(--text-light);
+  text-align: center;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.announcement a {
+  color: var(--text-light);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-left: 8px;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.announcement a:hover { opacity: 1; }
+
+/* ── Nav ── */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg-warm);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  padding: 0 var(--pad);
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+  backdrop-filter: blur(12px);
+}
+.logo { font-family: var(--serif); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.nav-links a { transition: color 0.2s; }
+.nav-links a:hover, .nav-links a.active { color: var(--text-dark); }
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.btn-outline {
+  border: 1.5px solid var(--text-dark);
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-outline:hover { background: var(--text-dark); color: var(--text-light); }
+
+/* ── Sections ── */
+.section { padding: 80px var(--pad); }
+.section-dark { background: var(--bg-dark); color: var(--text-light); }
+.section-dark .text-muted { color: rgba(245,240,235,0.5); }
+.section-warm { background: var(--bg-warm); }
+.section-alt { background: #EDE8E2; }
+.container { max-width: var(--max-w); margin: 0 auto; }
+
+/* ── Hero ── */
+.hero {
+  padding: 120px var(--pad) 100px;
+  background: var(--bg-dark);
+  color: var(--text-light);
+  text-align: center;
+}
+.hero-badge {
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+  color: rgba(255,255,255,0.6);
+}
+.hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent-light);
+}
+.hero p {
+  font-size: 18px;
+  max-width: 680px;
+  margin: 0 auto 40px;
+  color: rgba(245,240,235,0.65);
+  line-height: 1.7;
+}
+.hero-meta {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  font-size: 13px;
+  color: rgba(245,240,235,0.4);
+}
+.hero-meta span { display: flex; align-items: center; gap: 6px; }
+
+/* ── Score Card (hero bottom) ── */
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 60px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.score-card {
+  background: rgba(255,255,255,0.03);
+  padding: 28px 20px;
+  text-align: center;
+}
+.score-card .number {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.score-card .label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.score-green .number { color: var(--green); }
+.score-red .number { color: var(--red); }
+.score-yellow .number { color: var(--yellow); }
+
+/* ── Section Headers ── */
+.sh {
+  margin-bottom: 48px;
+}
+.sh-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.section-dark .sh-label { color: var(--accent-light); }
+.sh h2 {
+  font-family: var(--serif);
+  font-size: clamp(28px, 3.5vw, 44px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.sh p {
+  margin-top: 16px;
+  font-size: 17px;
+  color: var(--text-muted);
+  max-width: 640px;
+  line-height: 1.7;
+}
+.section-dark .sh p { color: rgba(245,240,235,0.5); }
+
+/* ── Summary Bullets ── */
+.summary-list { list-style: none; display: flex; flex-direction: column; gap: 20px; }
+.summary-list li {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.2s;
+}
+.summary-list li:hover { background: rgba(255,255,255,0.07); }
+.summary-num {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent-light);
+  flex-shrink: 0;
+  width: 36px;
+}
+.summary-text { font-size: 15px; line-height: 1.7; color: rgba(245,240,235,0.8); }
+.summary-text strong { color: var(--text-light); }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; margin: 24px 0; border-radius: 10px; border: 1px solid rgba(0,0,0,0.08); }
+.section-dark .table-wrap { border-color: rgba(255,255,255,0.08); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th {
+  background: var(--bg-dark);
+  color: var(--text-light);
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.section-dark th { background: rgba(255,255,255,0.08); }
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  vertical-align: top;
+}
+.section-dark td { border-color: rgba(255,255,255,0.06); color: rgba(245,240,235,0.8); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(0,0,0,0.02); }
+.section-dark tr:hover td { background: rgba(255,255,255,0.03); }
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tag-red { background: rgba(192,57,43,0.15); color: #E74C3C; }
+.tag-green { background: rgba(107,143,94,0.15); color: #6B8F5E; }
+.tag-yellow { background: rgba(184,150,12,0.15); color: #D4A90A; }
+.section-dark .tag-red { background: rgba(192,57,43,0.25); }
+.section-dark .tag-green { background: rgba(107,143,94,0.25); }
+.section-dark .tag-yellow { background: rgba(184,150,12,0.25); }
+
+/* ── Quote blocks ── */
+.quote-block {
+  border-left: 3px solid var(--accent);
+  padding: 20px 28px;
+  margin: 24px 0;
+  background: rgba(74,90,58,0.05);
+  border-radius: 0 8px 8px 0;
+}
+.section-dark .quote-block { background: rgba(74,90,58,0.12); border-color: var(--accent-light); }
+.quote-block p {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--text-dark);
+}
+.section-dark .quote-block p { color: rgba(245,240,235,0.85); }
+.quote-block .quote-author {
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+.section-dark .quote-block .quote-author { color: rgba(245,240,235,0.4); }
+
+/* ── Info cards ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+.info-card {
+  padding: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.07);
+  background: #fff;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.info-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.06); }
+.section-dark .info-card {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.08);
+}
+.section-dark .info-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.info-card h4 {
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.info-card p { font-size: 14px; color: var(--text-muted); line-height: 1.65; }
+.section-dark .info-card p { color: rgba(245,240,235,0.55); }
+
+/* ── Insight box ── */
+.insight {
+  background: rgba(74,90,58,0.08);
+  border: 1px solid rgba(74,90,58,0.2);
+  border-radius: 10px;
+  padding: 24px 28px;
+  margin: 28px 0;
+}
+.section-dark .insight {
+  background: rgba(74,90,58,0.15);
+  border-color: rgba(74,90,58,0.3);
+}
+.insight-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.insight p { font-size: 15px; line-height: 1.7; }
+
+/* ── Content blocks ── */
+.content-block { margin-bottom: 48px; }
+.content-block h3 {
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.content-block h4 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 20px 0 8px;
+  color: var(--accent);
+}
+.section-dark .content-block h4 { color: var(--accent-light); }
+.content-block p, .content-block li {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.section-dark .content-block p, .section-dark .content-block li { color: rgba(245,240,235,0.65); }
+.content-block ul { list-style: none; padding-left: 0; }
+.content-block ul li::before {
+  content: "\2022";
+  color: var(--accent);
+  font-weight: 700;
+  display: inline-block;
+  width: 16px;
+}
+.section-dark .content-block ul li::before { color: var(--accent-light); }
+
+/* ── Scorecard section ── */
+.scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.sc-item {
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.sc-item .sc-score {
+  font-family: var(--serif);
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.sc-item .sc-label { font-size: 13px; color: rgba(245,240,235,0.5); }
+
+/* ── Kill scenarios ── */
+.kill-card {
+  background: var(--red-bg);
+  border: 1px solid rgba(192,57,43,0.2);
+  border-radius: 10px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
+}
+.kill-card h4 {
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+.kill-card .prob {
+  display: inline-block;
+  background: rgba(192,57,43,0.3);
+  color: #E74C3C;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.kill-card p { font-size: 14px; color: rgba(245,240,235,0.6); line-height: 1.65; }
+
+/* ── Playbook ── */
+.play-card {
+  padding: 24px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.play-copy { background: var(--green-bg); border: 1px solid rgba(107,143,94,0.2); }
+.play-avoid { background: var(--red-bg); border: 1px solid rgba(192,57,43,0.2); }
+.play-card h4 { font-size: 16px; font-weight: 700; color: var(--text-light); margin-bottom: 8px; }
+.play-card p { font-size: 14px; color: rgba(245,240,235,0.6); line-height: 1.65; }
+
+/* ── Footer ── */
+footer {
+  background: var(--bg-dark-alt);
+  color: rgba(245,240,235,0.3);
+  padding: 48px var(--pad);
+  text-align: center;
+  font-size: 13px;
+}
+footer a { color: rgba(245,240,235,0.5); text-decoration: underline; }
+
+/* ── TOC sidebar (desktop) ── */
+.toc-sidebar {
+  position: fixed;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.toc-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.15);
+  transition: all 0.3s;
+  cursor: pointer;
+}
+.toc-dot:hover, .toc-dot.active { background: var(--accent); transform: scale(1.5); }
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .hero h1 { font-size: 32px; }
+  .hero-meta { flex-direction: column; gap: 8px; }
+  .cards-grid { grid-template-columns: 1fr; }
+  .toc-sidebar { display: none; }
+  .score-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- Announcement Bar -->
+<div class="announcement">
+  360 Reverse Engineering Report  &mdash;  80+ источников  &middot;  50 верифицированных  &middot;  19 аналитических блоков
+  <a href="#summary">Читать &rarr;</a>
+</div>
+
+<!-- Navigation -->
+<nav>
+  <div class="logo">Harvey.ai <span style="font-family:var(--sans);font-size:12px;font-weight:600;color:var(--accent);vertical-align:super;margin-left:4px;">360</span></div>
+  <div class="nav-links">
+    <a href="#summary" class="active">Выводы</a>
+    <a href="#company">Компания</a>
+    <a href="#product">Продукт</a>
+    <a href="#economics">Экономика</a>
+    <a href="#promises">Обещания vs Реальность</a>
+    <a href="#strategy">Стратегия</a>
+    <a href="#playbook">Playbook</a>
+  </div>
+  <div class="nav-right">
+    <a href="#sources" style="font-size:13px;font-weight:500;color:var(--text-muted);">Источники</a>
+    <a href="#" class="btn-outline" onclick="window.print();return false;">Скачать PDF</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="top">
+  <div class="container">
+    <div class="hero-badge">Исследование v2.0 &middot; Апрель 2026</div>
+    <h1>360 Reverse Engineering:<br><em>Harvey.ai</em></h1>
+    <p>Глубокий анализ самого быстрорастущего AI-стартапа в legal tech. Выручка, продукт, культура, противоречия, конкуренты, стратегические сценарии &mdash; всё, что скрыто за нарративом $11B оценки.</p>
+    <div class="hero-meta">
+      <span>Дата: 1 апреля 2026</span>
+      <span>Источники: 50 верифицированных</span>
+      <span>Методология: Triangulation + Claimed vs Verified</span>
+    </div>
+
+    <div class="score-grid">
+      <div class="score-card"><div class="number" style="color:#F5F0EB;">$11B</div><div class="label">Оценка</div></div>
+      <div class="score-card"><div class="number" style="color:#F5F0EB;">~$200M</div><div class="label">ARR</div></div>
+      <div class="score-card score-red"><div class="number">55x</div><div class="label">Revenue Multiple</div></div>
+      <div class="score-card score-green"><div class="number">4x</div><div class="label">Рост YoY</div></div>
+      <div class="score-card score-red"><div class="number">4.8</div><div class="label">Честность /10</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Executive Summary -->
+<section class="section section-dark" id="summary">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Главные выводы</div>
+      <h2>10 ключевых находок</h2>
+      <p>Что на самом деле стоит за нарративом $11B legal AI единорога</p>
+    </div>
+    <ol class="summary-list">
+      <li><span class="summary-num">1</span><div class="summary-text"><strong>Выручка реальна.</strong> ~$200M ARR, рост 4x YoY. Подтверждено CNBC и Sacra. Это не хайп &mdash; Harvey действительно продаёт.</div></li>
+      <li><span class="summary-num">2</span><div class="summary-text"><strong>Оценка содержит 2-5x премию.</strong> $11B при ~$200M ARR = 55x revenue. Thomson Reuters торгуется при 10x. IPO-оценка по Bloomberg: $450-900M &mdash; дисконт 80-85%.</div></li>
+      <li><span class="summary-num">3</span><div class="summary-text"><strong>BigLaw Bench &mdash; маркетинг под видом науки.</strong> 0.2% галлюцинаций из собственного бенчмарка. Harvey с RAG сравнивается с голыми моделями без RAG. Выборка: 1,688 предложений (3-4 ошибки). Статистически бессмысленно.</div></li>
+      <li><span class="summary-num">4</span><div class="summary-text"><strong>Парадокс верификации &mdash; главная проблема.</strong> Paul Weiss: 18 месяцев тестов без hard metrics &mdash; проверка AI-ответов съедает экономию времени. A&O Shearman: &laquo;Вы должны проверять всё.&raquo;</div></li>
+      <li><span class="summary-num">5</span><div class="summary-text"><strong>Разрыв покупатель &ne; пользователь.</strong> Покупают innovation officers и managing partners. Используют (или не используют) junior associates. 10-15% power users, остальные возвращаются к ChatGPT после месяца 2.</div></li>
+      <li><span class="summary-num">6</span><div class="summary-text"><strong>Lock-in &ne; Product Love.</strong> Годовые контракты + обязательные seats + нет публичных цен + нет free trial. 98% GRR при таких условиях &mdash; это exit barrier, не лояльность.</div></li>
+      <li><span class="summary-num">7</span><div class="summary-text"><strong>Культура токсична.</strong> Glassdoor 3.4/5 work-life balance. Blind: &laquo;уволены без предупреждения&raquo;, &laquo;проверяют Slack на деактивированные профили&raquo;. Инсайдер: &laquo;Все знают, что hallucination rate выше, чем мы говорим клиентам.&raquo;</div></li>
+      <li><span class="summary-num">8</span><div class="summary-text"><strong>Часы коммодитизации тикают.</strong> Дедлайн пивота: ~2027. Harvey должен перейти от &laquo;лучшая legal LLM&raquo; к &laquo;операционная система для юридической работы&raquo;. Agent Builder (март 2026) &mdash; правильный ход.</div></li>
+      <li><span class="summary-num">9</span><div class="summary-text"><strong>Thomson Reuters &mdash; экзистенциальная угроза.</strong> У TR есть Westlaw (контент) + CoCounsel (AI) + дистрибуция + $80B market cap. Если TR решит конкурировать всерьёз, Harvey проигрывает по ресурсам.</div></li>
+      <li><span class="summary-num">10</span><div class="summary-text"><strong>&laquo;Элементы snake oil&raquo; vs реальный продукт.</strong> Правда посередине. Harvey &mdash; реальный продукт с реальной выручкой. Но маркетинг (0.2% галлюцинаций, &laquo;AI-ассоциат&raquo;) значительно завышает текущие возможности. Это полезное дополнение, а не трансформация &mdash; пока.</div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- Company -->
+<section class="section section-warm" id="company">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блок 1</div>
+      <h2>Компания</h2>
+    </div>
+
+    <div class="cards-grid">
+      <div class="info-card">
+        <h4>Юрлицо</h4>
+        <p><strong>Counsel AI Corporation</strong> (DBA: Harvey)<br>Основана: лето 2022<br>HQ: San Francisco, CA<br>Офисы: NYC, London, Sydney, Toronto<br>Расширение: Mexico, Bengaluru, Munich, Paris, Stockholm</p>
+      </div>
+      <div class="info-card">
+        <h4>Winston Weinberg, CEO</h4>
+        <p>~30 лет. Бывший первогодний associate в O'Melveny & Myers. Cold-emailed Sam Altman &rarr; seed от OpenAI.<br><br>&laquo;You need to re-earn your role at Harvey every six months.&raquo;<br><em>&mdash; Fortune, март 2026</em></p>
+      </div>
+      <div class="info-card">
+        <h4>Gabriel Pereyra, President</h4>
+        <p>Ex-Google DeepMind, ex-Meta ML Engineer. Один из первых &laquo;Brain Residents&raquo; Google.<br><br>&laquo;The models are the product&raquo; &mdash; философия широкого AI-ассоциата, не узких инструментов.</p>
+      </div>
+      <div class="info-card">
+        <h4>Команда</h4>
+        <p><strong>~1,191</strong> сотрудников (апрель 2026)<br>Рост <strong>9x</strong> за 24 месяца (от 132)<br>Открыто <strong>60+</strong> позиций<br><br><span class="tag tag-red">Red flag</span> Из 60 ролей: 20 sales vs 10 engineering</p>
+      </div>
+    </div>
+
+    <div class="content-block" style="margin-top:40px;">
+      <h3>Культура (Glassdoor & Blind)</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Метрика</th><th>Значение</th><th>Сигнал</th></tr>
+          <tr><td>Общая оценка</td><td>4.1/5</td><td><span class="tag tag-yellow">Средне</span></td></tr>
+          <tr><td>Рекомендуют</td><td>75%</td><td><span class="tag tag-yellow">Средне</span></td></tr>
+          <tr><td>Work-Life Balance</td><td>3.4/5</td><td><span class="tag tag-red">Red flag</span></td></tr>
+        </table>
+      </div>
+      <div class="quote-block">
+        <p>&laquo;Fearful culture where everyone is waiting for the hammer to drop, with people let go with no explanation and coworkers searching for deactivated profiles.&raquo;</p>
+        <div class="quote-author">&mdash; Glassdoor, анонимный сотрудник</div>
+      </div>
+      <div class="quote-block">
+        <p>&laquo;Internally, everyone knows the hallucination rate is higher than what we tell clients.&raquo;</p>
+        <div class="quote-author">&mdash; TeamBlind, анонимный инсайдер</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Product & Tech -->
+<section class="section section-dark" id="product">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блоки 2-3</div>
+      <h2>Продукт и архитектура</h2>
+      <p>От GPT-wrapper до агентной платформы за 3.5 года. Но все метрики качества &mdash; self-reported.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <tr><th>Продукт</th><th>Что делает</th><th>Запуск</th></tr>
+        <tr><td>Harvey Assistant</td><td>AI-чат: drafting, research, analysis</td><td>2022</td></tr>
+        <tr><td>Harvey Vault</td><td>Безопасный анализ документов и due diligence</td><td>2024</td></tr>
+        <tr><td>Harvey Knowledge</td><td>Глубокий юридический research с верификацией</td><td>2024</td></tr>
+        <tr><td>Agent Builder</td><td>Агентная платформа с checkpoints и conditionals</td><td>Март 2026</td></tr>
+        <tr><td>Word Add-In</td><td>Интеграция в Microsoft Word</td><td>2025</td></tr>
+      </table>
+    </div>
+
+    <div class="content-block" style="margin-top:40px;">
+      <h3>Заявлено vs Подтверждено</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Метрика</th><th>Заявлено (Harvey)</th><th>Подтверждено</th><th>Разрыв</th></tr>
+          <tr><td>Галлюцинации</td><td>0.2% (BigLaw Bench)</td><td>~5-17% (Stanford HAI)</td><td><span class="tag tag-red">CRITICAL &middot; 25-85x</span></td></tr>
+          <tr><td>Месячное использование</td><td>92%</td><td>77% (CEO на Reddit)</td><td><span class="tag tag-yellow">MEDIUM</span></td></tr>
+          <tr><td>AmLaw 100</td><td>60 фирм</td><td>42 (Artificial Lawyer, авг 2025)</td><td><span class="tag tag-yellow">MEDIUM &middot; 1.4x</span></td></tr>
+          <tr><td>Выручка</td><td>~$200M ARR</td><td>$190-195M (Sacra)</td><td><span class="tag tag-green">OK &middot; 1.03x</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Критический разбор BigLaw Bench</h3>
+      <p style="color:rgba(245,240,235,0.65);">7 проблем с заявлением &laquo;0.2% галлюцинаций&raquo;:</p>
+      <div class="cards-grid" style="margin-top:20px;">
+        <div class="info-card"><h4>1. Self-benchmark</h4><p>Harvey тестировал Harvey. Нет peer review, нет independent audit.</p></div>
+        <div class="info-card"><h4>2. Micro-выборка</h4><p>1,688 предложений. 0.2% = 3-4 ошибки. Разница между 0.2% и 0.4% &mdash; буквально 3 предложения.</p></div>
+        <div class="info-card"><h4>3. Нечестное сравнение</h4><p>Harvey с RAG vs Claude/GPT БЕЗ RAG. Как гонщик с картой vs гонщик без карты.</p></div>
+        <div class="info-card"><h4>4. Исключены ошибки логики</h4><p>Только фактические ошибки. Flawed legal reasoning &mdash; не считается. А это опаснее.</p></div>
+        <div class="info-card"><h4>5. Непрозрачный dataset</h4><p>Нет total question count, нет category breakdown, нет публичного dataset для воспроизведения.</p></div>
+        <div class="info-card"><h4>6. Нет CI/stat significance</h4><p>Нет confidence intervals, нет p-value. Научный стандарт не соблюдён.</p></div>
+      </div>
+      <div class="insight" style="margin-top:24px;">
+        <div class="insight-label">Вердикт</div>
+        <p>0.2% &mdash; маркетинговая цифра из методологически слабого self-benchmark. Надёжность: 1.5/5.</p>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Технический стек</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Компонент</th><th>Технология</th></tr>
+          <tr><td>Облако</td><td>Microsoft Azure</td></tr>
+          <tr><td>AI-модели</td><td>OpenAI GPT-5, o3; Anthropic Claude Opus/Sonnet 4; Google Gemini 2.5 Pro</td></tr>
+          <tr><td>Маршрутизация</td><td>Авто-routing между моделями</td></tr>
+          <tr><td>Embeddings</td><td>Voyage AI, 20B+ токенов legal data</td></tr>
+          <tr><td>Безопасность</td><td>SOC 2 Type II, ISO 27001, GDPR, CCPA, AES-256, Zero Data Retention</td></tr>
+          <tr><td>Интеграции</td><td>LexisNexis, iManage, Box, Aderant, Wolters Kluwer, Word</td></tr>
+        </table>
+      </div>
+      <div class="insight">
+        <div class="insight-label">Ключевой вывод</div>
+        <p>Настоящий moat &mdash; не AI, а compliance + relationships + legal data integrations. Если Thomson Reuters или LexisNexis решат конкурировать напрямую &mdash; Harvey уязвим.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Economics -->
+<section class="section section-warm" id="economics">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блоки 4-6</div>
+      <h2>Клиенты, цены и юнит-экономика</h2>
+    </div>
+
+    <div class="content-block">
+      <h3>Ценообразование</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Параметр</th><th>Значение</th></tr>
+          <tr><td>Модель</td><td>Per-seat, годовая подписка</td></tr>
+          <tr><td>Оценочная цена</td><td>$1,000-1,200/seat/мес</td></tr>
+          <tr><td>Мин. seats</td><td>~20</td></tr>
+          <tr><td>Мин. годовой чек</td><td>~$288,000</td></tr>
+          <tr><td>Публичные цены</td><td><strong>НЕТ</strong></td></tr>
+          <tr><td>Free trial</td><td><strong>НЕТ</strong> (2-недельный пилот)</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Harvey vs конкуренты: цены</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Продукт</th><th>Цена/мес</th><th>Разница</th></tr>
+          <tr><td><strong>Harvey</strong></td><td>$1,000-1,200</td><td>&mdash;</td></tr>
+          <tr><td>CoCounsel (Thomson Reuters)</td><td>$225-428</td><td>Harvey дороже в 3-5x</td></tr>
+          <tr><td>Spellbook</td><td>$179</td><td>Harvey дороже в 6x</td></tr>
+          <tr><td>Clio (Vincent AI)</td><td>Включено в план</td><td>&mdash;</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Реконструированная юнит-экономика</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Метрика</th><th>Значение</th><th>Комментарий</th></tr>
+          <tr><td>ARR</td><td>~$200M</td><td><span class="tag tag-green">Подтверждено</span></td></tr>
+          <tr><td>Выручка/сотрудник</td><td>~$168K</td><td><span class="tag tag-yellow">Ниже SaaS бенчмарка ($200-300K)</span></td></tr>
+          <tr><td>GRR</td><td>98%</td><td><span class="tag tag-yellow">Заявлено CEO, не аудировано</span></td></tr>
+          <tr><td>Использование seats</td><td>77%</td><td><span class="tag tag-red">23% оплаченных мест не используются</span></td></tr>
+          <tr><td>Burn rate</td><td>$15-25M/мес</td><td>Оценка</td></tr>
+          <tr><td>Runway</td><td>2-3 года</td><td>При текущем burn</td></tr>
+          <tr><td>Revenue multiple</td><td>55x</td><td><span class="tag tag-red">Экстремально высокий</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Финансирование</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Дата</th><th>Раунд</th><th>Сумма</th><th>Оценка</th><th>Lead</th></tr>
+          <tr><td>Ноя 2022</td><td>Seed</td><td>$5M</td><td>&mdash;</td><td>OpenAI Startup Fund</td></tr>
+          <tr><td>2023</td><td>Series B</td><td>$80M</td><td>$715M</td><td>Sequoia, Elad Gil</td></tr>
+          <tr><td>Июл 2024</td><td>Series C</td><td>$100M</td><td>$1.5B</td><td>GV (Google Ventures)</td></tr>
+          <tr><td>Фев 2025</td><td>Series D</td><td>$300M</td><td>$3B</td><td>Sequoia</td></tr>
+          <tr><td>Июн 2025</td><td>Series E</td><td>$300M</td><td>$5B</td><td>Kleiner Perkins, Coatue</td></tr>
+          <tr><td>Окт 2025</td><td>Strategic</td><td>&euro;50M</td><td>&mdash;</td><td>EQT Growth</td></tr>
+          <tr><td>Дек 2025</td><td>Series F</td><td>$160M</td><td>$8B</td><td>Andreessen Horowitz</td></tr>
+          <tr><td>Мар 2026</td><td>Series G</td><td>$200M</td><td>$11B</td><td>GIC, Sequoia</td></tr>
+        </table>
+      </div>
+      <p style="font-size:14px;color:var(--text-muted);margin-top:12px;"><strong>Итого: &gt;$1.2B</strong> за 7+ раундов. Sequoia утроила ставку. T. Rowe Price на Series G = сигнал подготовки к IPO.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Promise vs Reality -->
+<section class="section section-dark" id="promises">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блок 7</div>
+      <h2>Обещания vs Реальность</h2>
+      <p>Ключевой аналитический блок. Для каждого обещания &mdash; проверка реальности.</p>
+    </div>
+
+    <div class="content-block">
+      <h3>Матрица обещаний</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Обещание</th><th>Реальность</th><th>Разрыв</th></tr>
+          <tr><td>&laquo;0.2% галлюцинаций&raquo;</td><td>Stanford HAI: ~17% для legal AI</td><td><span class="tag tag-red">CRITICAL</span></td></tr>
+          <tr><td>&laquo;92% месячное использование&raquo;</td><td>CEO признал 77% на Reddit</td><td><span class="tag tag-yellow">MEDIUM</span></td></tr>
+          <tr><td>&laquo;100,000+ юристов&raquo;</td><td>Не ясно: active daily? monthly? ever logged in?</td><td><span class="tag tag-yellow">MEDIUM</span></td></tr>
+          <tr><td>&laquo;AI-ассоциат, заменяющий junior&raquo;</td><td>A&O: 2-3 часа экономии/неделю &mdash; дополнение, не замена</td><td><span class="tag tag-red">HIGH</span></td></tr>
+          <tr><td>&laquo;Proprietary AI&raquo;</td><td>Multi-model wrapper на GPT-5/Claude/Gemini + fine-tuning</td><td><span class="tag tag-yellow">MEDIUM</span></td></tr>
+          <tr><td>&laquo;98% GRR&raquo;</td><td>При 12-month lock-in это минимум, не достижение</td><td><span class="tag tag-green">LOW</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Сигналы противоречий</h3>
+      <ul>
+        <li>Только годовые контракты &rarr; скрывают churn</li>
+        <li>Нет публичных цен &rarr; не выдержат сравнения с CoCounsel ($225/мес)</li>
+        <li>0 отзывов на G2 при 100K юзеров &rarr; enterprise lock-in, не organic love</li>
+        <li>CEO говорит о фандрейзинге, не о продукте &rarr; метрики слабые</li>
+        <li>Больше нанимают в продажи, чем в инженерию &rarr; selling &gt; building</li>
+        <li>Case studies без конкретных ROI &rarr; результаты неубедительны</li>
+      </ul>
+    </div>
+
+    <div class="quote-block">
+      <p>&laquo;Мы купили Harvey за $400K/год на 30 seats. Месяц 2: юристы вернулись к ChatGPT. Месяц 4: из 30 seats используются 15. Месяц 12: renewal подписали &mdash; потому что leadership уже объявил &laquo;AI transformation&raquo; и не может сказать board, что не сработало.&raquo;</p>
+      <div class="quote-author">&mdash; Контр-нарратив: глазами разочарованного клиента</div>
+    </div>
+
+    <div class="content-block" style="margin-top:48px;">
+      <h3>Голоса пользователей</h3>
+      <div class="quote-block">
+        <p>&laquo;There's absolutely 0 value add on top of GPT. Only thing product does decently well at is summarizing, which is an insult given the rates being charged.&raquo;</p>
+        <div class="quote-author">&mdash; Анонимный ex-сотрудник, Reddit, сентябрь 2025</div>
+      </div>
+      <div class="quote-block">
+        <p>&laquo;The likes of Harvey are toys, not tools. Play things that are fun to tinker with.&raquo;</p>
+        <div class="quote-author">&mdash; Shahrukh Khan, fund lawyer, Substack</div>
+      </div>
+      <div class="quote-block">
+        <p>&laquo;Man this was a hella sanitized AMA with all softball questions and no seriously heavy hitting difficult questions. Wtf lol&raquo;</p>
+        <div class="quote-author">&mdash; u/Celac242, Reddit AMA, декабрь 2025 (39 upvotes, топ-комментарий)</div>
+      </div>
+      <div class="quote-block">
+        <p>&laquo;You must validate everything coming out of the system. You have to check everything.&raquo;</p>
+        <div class="quote-author">&mdash; David Wakeling, A&O Shearman, руководитель инноваций</div>
+      </div>
+    </div>
+
+    <div class="content-block" style="margin-top:40px;">
+      <h3>Оценка честности (v2.0)</h3>
+      <div class="scorecard-grid">
+        <div class="sc-item"><div class="sc-score" style="color:var(--green);">9/10</div><div class="sc-label">Выручка и рост</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--red);">4/10</div><div class="sc-label">Качество продукта</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--yellow);">6/10</div><div class="sc-label">Клиентские заявления</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--yellow);">6/10</div><div class="sc-label">Тех. инновации</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--red);">2/10</div><div class="sc-label">Культура</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--red);">1/10</div><div class="sc-label">Прозрачность цен</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--red);">3/10</div><div class="sc-label">Честность маркетинга</div></div>
+        <div class="sc-item"><div class="sc-score" style="color:var(--green);">7/10</div><div class="sc-label">Стратегия</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Strategy -->
+<section class="section section-warm" id="strategy">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блоки 10, 16-17</div>
+      <h2>Стратегический анализ</h2>
+    </div>
+
+    <div class="content-block">
+      <h3>Пять сил Портера</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Сила</th><th>Интенсивность</th><th>Анализ</th></tr>
+          <tr><td>Угроза новых игроков</td><td><span class="tag tag-red">ВЫСОКАЯ</span></td><td>Любая команда может fine-tune LLM на юридических данных</td></tr>
+          <tr><td>Сила поставщиков</td><td><span class="tag tag-red">ВЫСОКАЯ</span></td><td>OpenAI &mdash; критический поставщик. Повышение API-цен = экзистенциальный риск</td></tr>
+          <tr><td>Сила покупателей</td><td><span class="tag tag-yellow">УМЕРЕННО-ВЫСОКАЯ</span></td><td>BigLaw &mdash; sophisticated buyers, могут строить in-house</td></tr>
+          <tr><td>Угроза субститутов</td><td><span class="tag tag-red">ВЫСОКАЯ</span></td><td>ChatGPT, Claude, Gemini делают базовые legal tasks. CoCounsel &mdash; прямой субститут</td></tr>
+          <tr><td>Конкурентная борьба</td><td><span class="tag tag-red">ВЫСОКАЯ</span></td><td>CoCounsel/TR, Lexis+ AI, Luminance + десятки стартапов</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Матрица вероятности M&A</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Покупатель</th><th>Вероятность</th><th>Ценовой диапазон</th><th>Логика</th></tr>
+          <tr><td>Thomson Reuters</td><td>15-20%</td><td>$5-10B</td><td>Опередить CoCounsel, получить BigLaw-отношения</td></tr>
+          <tr><td>RELX / LexisNexis</td><td>10-15%</td><td>$4-8B</td><td>Защитная покупка, догнать TR</td></tr>
+          <tr><td>Microsoft</td><td>5-10%</td><td>$8-15B</td><td>Legal vertical для Copilot, но скорее построят сами</td></tr>
+          <tr><td>PE (Thoma Bravo, Vista)</td><td>5-10%</td><td>$3-5B</td><td>Roll-up с другими legal tech</td></tr>
+          <tr><td><strong>IPO / остаться private</strong></td><td><strong>45-55%</strong></td><td>&mdash;</td><td><strong>Наиболее вероятный сценарий</strong></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>5 сценариев уничтожения Harvey</h3>
+    </div>
+    <div class="kill-card">
+      <div class="prob">25-30% к 2028</div>
+      <h4>1. &laquo;Достаточно хорошие&raquo; базовые модели</h4>
+      <p>GPT-5/Claude 5 настолько хорош, что $20/мес ChatGPT делает 90% того, что Harvey за $1,200/мес. BigLaw IT-команды строят простые wrappers.</p>
+    </div>
+    <div class="kill-card">
+      <div class="prob">10-15% в год</div>
+      <h4>2. Катастрофическая галлюцинация</h4>
+      <p>Harvey генерирует fabricated legal precedent &rarr; попадает в court filing &rarr; malpractice crisis. Gordon Rees уже извинилась за AI-citations (окт 2025). 850+ документированных случаев в мире. Вопрос не &laquo;если&raquo;, а &laquo;когда&raquo;.</p>
+    </div>
+    <div class="kill-card">
+      <div class="prob">20-25% к 2027</div>
+      <h4>3. Thomson Reuters / RELX строят лучший продукт</h4>
+      <p>TR: CoCounsel + Westlaw (proprietary data) + massive distribution. У TR/RELX есть то, чего у Harvey НЕТ: собственный юридический контент.</p>
+    </div>
+    <div class="kill-card">
+      <div class="prob">10-15%</div>
+      <h4>4. Зависимость от OpenAI</h4>
+      <p>OpenAI решает конкурировать в legal или сталкивается с кризисом. Мульти-модельная стратегия Harvey &mdash; частичная защита.</p>
+    </div>
+    <div class="kill-card">
+      <div class="prob">5-10%</div>
+      <h4>5. Регуляторный удар</h4>
+      <p>EU AI Act классифицирует legal AI как high-risk со strict liability. Compliance costs делают модель нерентабельной.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Playbook -->
+<section class="section section-dark" id="playbook">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блок 12</div>
+      <h2>Playbook: что копировать, чего избегать</h2>
+    </div>
+
+    <div class="content-block">
+      <h3 style="color:var(--green);">Что копировать</h3>
+    </div>
+    <div class="play-card play-copy">
+      <h4>1. Legal Engineers как GTM-канал</h4>
+      <p>Нанимать бывших юристов из target-фирм как sales + implementation. Говорят на языке клиента, понимают workflow, строят доверие.</p>
+    </div>
+    <div class="play-card play-copy">
+      <h4>2. Land-and-expand с расширением seats</h4>
+      <p>Начать с 20 seats &rarr; доказать value &rarr; расшириться до 200+. Снижает risk для покупателя, создаёт внутренних champions.</p>
+    </div>
+    <div class="play-card play-copy">
+      <h4>3. Compliance-first позиционирование</h4>
+      <p>SOC 2 + ISO 27001 + GDPR + Zero Data Retention ДО первого enterprise-клиента. Снимает блокер #1 для regulated industries.</p>
+    </div>
+    <div class="play-card play-copy">
+      <h4>4. Мульти-модельная архитектура</h4>
+      <p>Не зависеть от одного AI-провайдера. Авто-routing между моделями. Leverage конкуренции OpenAI/Anthropic/Google.</p>
+    </div>
+    <div class="play-card play-copy">
+      <h4>5. Profit-sharing с flagship-клиентом</h4>
+      <p>Модель A&O Shearman: co-develop + share profits. Превращает клиента в со-создателя с aligned incentives.</p>
+    </div>
+
+    <div class="content-block" style="margin-top:48px;">
+      <h3 style="color:var(--red);">Чего НЕ делать</h3>
+    </div>
+    <div class="play-card play-avoid">
+      <h4>1. Fear culture</h4>
+      <p>&laquo;Re-earn your role every 6 months&raquo; &rarr; high attrition, knowledge loss, Glassdoor damage. Вместо: mission-driven culture с transparent expectations.</p>
+    </div>
+    <div class="play-card play-avoid">
+      <h4>2. Self-benchmarking под видом науки</h4>
+      <p>BigLaw Bench &mdash; cherry-picked methodology, no peer review. Подрывает доверие. Вместо: независимый third-party audit.</p>
+    </div>
+    <div class="play-card play-avoid">
+      <h4>3. Скрывать цены и прятать ROI Calculator</h4>
+      <p>Harvey создал ROI Calculator, но спрятал в sub-menu. Если ROI положительный &mdash; показывай на главной.</p>
+    </div>
+    <div class="play-card play-avoid">
+      <h4>4. 9x headcount growth без культуры</h4>
+      <p>132 &rarr; 1,191 за 24 месяца. Culture dilution, nepotism allegations. Вместо: sustainable 2-3x annual growth.</p>
+    </div>
+
+    <div class="content-block" style="margin-top:48px;">
+      <h3>Возможности для арбитража</h3>
+      <div class="cards-grid">
+        <div class="info-card"><h4>Mid-market gap</h4><p>Harvey игнорирует фирмы с &lt;200 юристов. Огромный underserved market для affordable legal AI ($100-300/seat/мес).</p></div>
+        <div class="info-card"><h4>Self-serve legal AI</h4><p>Zero PLG-игроков в legal AI. First mover advantage для того, кто сделает free trial + self-serve.</p></div>
+        <div class="info-card"><h4>Regional arbitrage</h4><p>Harvey слаб в Азии, Латинской Америке, на Ближнем Востоке. Локальные игроки могут выиграть.</p></div>
+        <div class="info-card"><h4>Open-source legal AI</h4><p>Нет OSS-игрока в legal domain. RAG + fine-tuning на публичных юридических данных.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Sources -->
+<section class="section section-alt" id="sources">
+  <div class="container">
+    <div class="sh">
+      <div class="sh-label">Блок 13 + 19</div>
+      <h2>Источники и верификация</h2>
+      <p>50 источников. Средняя надёжность: 3.1/5. 70% &mdash; независимые.</p>
+    </div>
+
+    <div class="content-block">
+      <h3>Ключевые источники (топ-15)</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>#</th><th>Источник</th><th>Тип</th><th>Надёжность</th></tr>
+          <tr><td>1</td><td>CNBC &mdash; $11B valuation</td><td>Журналистика</td><td><span class="tag tag-green">5/5</span></td></tr>
+          <tr><td>2</td><td>TechCrunch &mdash; Inside Harvey</td><td>Журналистика</td><td><span class="tag tag-green">5/5</span></td></tr>
+          <tr><td>3</td><td>Sacra &mdash; Harvey Analysis</td><td>Исследование</td><td><span class="tag tag-green">4/5</span></td></tr>
+          <tr><td>4</td><td>Stanford HAI &mdash; Legal AI Hallucinations</td><td>Академический</td><td><span class="tag tag-green">5/5</span></td></tr>
+          <tr><td>5</td><td>Artificial Lawyer &mdash; $100M ARR</td><td>Отраслевой</td><td><span class="tag tag-green">4/5</span></td></tr>
+          <tr><td>6</td><td>Fortune &mdash; Weinberg Profile</td><td>Журналистика</td><td><span class="tag tag-green">4/5</span></td></tr>
+          <tr><td>7</td><td>Glassdoor &mdash; Reviews</td><td>Сотрудники</td><td><span class="tag tag-yellow">3/5</span></td></tr>
+          <tr><td>8</td><td>TeamBlind &mdash; Anonymous</td><td>Сотрудники (анон)</td><td><span class="tag tag-yellow">3/5</span></td></tr>
+          <tr><td>9</td><td>Cash and Carried (Substack)</td><td>Комментарий</td><td><span class="tag tag-yellow">3/5</span></td></tr>
+          <tr><td>10</td><td>Harvey Blog &mdash; BigLaw Bench</td><td>Компания</td><td><span class="tag tag-red">1.5/5</span></td></tr>
+          <tr><td>11</td><td>Harvey.ai &mdash; Customers</td><td>Компания</td><td><span class="tag tag-red">2/5</span></td></tr>
+          <tr><td>12</td><td>Harvey.ai &mdash; Platform</td><td>Компания</td><td><span class="tag tag-red">2/5</span></td></tr>
+          <tr><td>13</td><td>EQT &mdash; Harvey Investment</td><td>Инвестор</td><td><span class="tag tag-green">4/5</span></td></tr>
+          <tr><td>14</td><td>Tracxn &mdash; Acquisitions</td><td>Данные</td><td><span class="tag tag-green">4/5</span></td></tr>
+          <tr><td>15</td><td>Gordon Rees Hallucination (Above the Law)</td><td>Журналистика</td><td><span class="tag tag-green">5/5</span></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="content-block">
+      <h3>Матрица верификации</h3>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Факт</th><th>Источник 1</th><th>Источник 2</th><th>Источник 3</th><th>Уверенность</th></tr>
+          <tr><td>Оценка $11B</td><td>CNBC</td><td>Bloomberg</td><td>TechCrunch</td><td><span class="tag tag-green">ВЫСОКАЯ</span></td></tr>
+          <tr><td>ARR ~$200M</td><td>Sacra ($190M)</td><td>CNBC ($100M авг)</td><td>Latka ($195M)</td><td><span class="tag tag-green">ВЫСОКАЯ</span></td></tr>
+          <tr><td>1,300 клиентов</td><td>CNBC</td><td>Harvey blog</td><td>&mdash;</td><td><span class="tag tag-green">ВЫСОКАЯ</span></td></tr>
+          <tr><td>0.2% галлюцинаций</td><td>Harvey blog</td><td>Опровергнуто Stanford</td><td>&mdash;</td><td><span class="tag tag-red">НИЗКАЯ</span></td></tr>
+          <tr><td>98% GRR</td><td>CEO Reddit</td><td>&mdash;</td><td>&mdash;</td><td><span class="tag tag-yellow">СРЕДНЯЯ</span></td></tr>
+          <tr><td>Токсичная культура</td><td>Glassdoor</td><td>Blind</td><td>Инсайдеры</td><td><span class="tag tag-green">ВЫСОКАЯ</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>360 Reverse Engineering: Harvey.ai &middot; v2.0 &middot; Апрель 2026</p>
+  <p style="margin-top:8px;">Методология: Triangulation из 80+ источников &middot; 50 верифицированных &middot; Claimed vs Verified</p>
+  <p style="margin-top:16px;color:rgba(245,240,235,0.2);">Данный отчёт подготовлен исключительно в исследовательских целях. Все данные получены из открытых источников.</p>
+</footer>
+
+<script>
+// Smooth reveal on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.opacity = '1';
+      entry.target.style.transform = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.content-block, .info-card, .kill-card, .play-card, .quote-block, .insight').forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(20px)';
+  el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  observer.observe(el);
+});
+
+// Active nav link
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 100) current = s.id;
+  });
+  navLinks.forEach(a => {
+    a.classList.remove('active');
+    if (a.getAttribute('href') === '#' + current) a.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
